@@ -61,6 +61,7 @@ class ProductImportWizard(models.TransientModel):
         total = len(products_data)
         success = 0
         error_msgs = []
+        image_cache = {}
 
         BATCH_SIZE = 50 # 处理批次大小
 
@@ -99,23 +100,32 @@ class ProductImportWizard(models.TransientModel):
                 # 图片 URL 下载
                 image_url = row[6]
                 print(f"Image URL: {image_url}")
+                image_content = None
                 if image_url and isinstance(image_url, str) and image_url.startswith(('http://', 'https://')):
-                    try:
-                        response = requests.get(image_url, timeout=10)
-                        print(f"Response: {response.status_code}")
-                        if response.status_code == 200:
-                            product_tmpl.image_1920 = base64.b64encode(response.content)
-                            product_tmpl.image_1024 = base64.b64encode(response.content)
-                            product_tmpl.image_512 = base64.b64encode(response.content)
-                            product_tmpl.image_256 = base64.b64encode(response.content)
-                            product_tmpl.image_128 = base64.b64encode(response.content)
-                    except Exception as e:
-                        print(f"Image download failed: {e}")
-                        _logger.warning(f"[Row {row_num}] Image download failed for {image_url}: {e}")
+                    if image_url in image_cache:
+                        image_content = image_cache[image_url]
+                        #print(f"Image content from cache: {image_content}")
+                    else:
+                        try:
+                            response = requests.get(image_url, timeout=10)
+                            print(f"Response: {response.status_code}")
+                            if response.status_code == 200:
+                                image_content = response.content
+                                # print(f"Image content: {image_content}")
+                                image_cache[image_url] = response.content
+                        except Exception as e:
+                            print(f"Image download failed: {e}")
+                            _logger.warning(f"[Row {row_num}] Image download failed for {image_url}: {e}")
+                if image_content:
+                    product_tmpl.image_1920 = base64.b64encode(response.content)
+                    product_tmpl.image_1024 = base64.b64encode(response.content)
+                    product_tmpl.image_512 = base64.b64encode(response.content)
+                    product_tmpl.image_256 = base64.b64encode(response.content)
+                    product_tmpl.image_128 = base64.b64encode(response.content)
 
                 # 设置字段
-                weight = float(row[7]) if row[7] else 0
-                price = float(row[8]) if row[8] else 0
+                weight = row[7] if row[7] else 0
+                price = row[8] if row[8] else 0
                 # length = float(row[10]) if row[10] else 0
                 # width = float(row[11]) if row[11] else 0
                 # height = float(row[12]) if row[12] else 0
@@ -148,19 +158,21 @@ class ProductImportWizard(models.TransientModel):
                     self.env['products_ext.products_ext'].create({
                         'product_id': product.id,
                         'product_url': row[13],
-                        'declared_price': float(row[18]) if row[18] else 0,
+                        'declared_price': row[18] if row[18] else 0,
                         'declared_name_cn': row[16],
-                        'declared_name_en': row[15],
+                        'declared_name_en': row[15]
                     })
                 else:
                     product_ext.product_url = row[13]
-                    product_ext.declared_price = float(row[18]) if row[18] else 0,
+                    product_ext.declared_price = row[18] if row[18] else 0
                     product_ext.declared_name_cn = row[16]
                     product_ext.declared_name_en = row[15]
 
                 success += 1
             except Exception as e:
                 error_msgs.append(f"Row {row_num}: {str(e)}")
+                print(f"Error processing row {row_num}: {e}")
+                exit(1)
             if idx % BATCH_SIZE == 0:
                 self.env.cr.commit()
                 self.env.invalidate_all()
