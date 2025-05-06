@@ -2,7 +2,7 @@
     "name": "Product Excel Import Advanced",
     "summary": "Import product data from Excel with SKU match, image, and logs",
     "version": "1.0",
-    "depends": ["base", "product","stock","products_batch"],
+    "depends": ["base", "product","stock"],
     "author": "Steve Liu",
     "category": "Product",
     "data": [
