@@ -62,12 +62,14 @@ class ProductImportWizard(models.TransientModel):
         success = 0
         error_msgs = []
 
-        for row_num, row in products_data:
-            #print(f"Processing row {row_num}: {row}")
-            #print(row)
+        BATCH_SIZE = 50 # 处理批次大小
+
+        for idx, (row_num, row) in enumerate(products_data, 1):
+            print(f"Processing row {row_num}: {row}")
+            print(row)
             try:
                 sku = str(row[0]).strip()
-                #print(f"SKU: {sku}")
+                print(f"SKU: {sku}")
                 if not sku:
                     raise ValueError("SKU is required.")
 
@@ -100,6 +102,7 @@ class ProductImportWizard(models.TransientModel):
                 if image_url and isinstance(image_url, str) and image_url.startswith(('http://', 'https://')):
                     try:
                         response = requests.get(image_url, timeout=10)
+                        print(f"Response: {response.status_code}")
                         if response.status_code == 200:
                             product_tmpl.image_1920 = base64.b64encode(response.content)
                             product_tmpl.image_1024 = base64.b64encode(response.content)
@@ -107,14 +110,15 @@ class ProductImportWizard(models.TransientModel):
                             product_tmpl.image_256 = base64.b64encode(response.content)
                             product_tmpl.image_128 = base64.b64encode(response.content)
                     except Exception as e:
+                        print(f"Image download failed: {e}")
                         _logger.warning(f"[Row {row_num}] Image download failed for {image_url}: {e}")
 
                 # 设置字段
                 weight = float(row[7]) if row[7] else 0
                 price = float(row[8]) if row[8] else 0
-                length = float(row[9]) if row[9] else 0
-                width = float(row[10]) if row[10] else 0
-                height = float(row[11]) if row[11] else 0
+                # length = float(row[10]) if row[10] else 0
+                # width = float(row[11]) if row[11] else 0
+                # height = float(row[12]) if row[12] else 0
 
                 product_tmpl.weight = weight
                 product.standard_price = price
@@ -157,6 +161,9 @@ class ProductImportWizard(models.TransientModel):
                 success += 1
             except Exception as e:
                 error_msgs.append(f"Row {row_num}: {str(e)}")
+            if idx % BATCH_SIZE == 0:
+                self.env.cr.commit()
+                self.env.invalidate_all()
 
         self.env['product.import.log'].create({
             'name': self.filename,
