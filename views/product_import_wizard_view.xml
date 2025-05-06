@@ -1,0 +1,30 @@
+<odoo>
+    <record id="view_product_import_wizard_form" model="ir.ui.view">
+        <field name="name">product.import.wizard.form</field>
+        <field name="model">product.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Product Excel Import">
+                <group>
+                    <field name="file" filename="filename"/>
+                    <field name="filename"/>
+                </group>
+                <footer>
+                    <button name="action_import_products" type="object" string="Import Products" class="btn-primary"/>
+                    <button string="Cancel" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <act_window id="action_product_import_wizard"
+                name="Import Products"
+                res_model="product.import.wizard"
+                view_mode="form"
+                target="new"/>
+
+    <menuitem id="menu_product_import_wizard"
+          name="产品Excel导入"
+          parent="stock.menu_stock_root"
+          action="action_product_import_wizard"
+          sequence="100"/>
+</odoo>

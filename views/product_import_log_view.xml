@@ -1,0 +1,36 @@
+<odoo>
+    <record id="view_product_import_log_tree" model="ir.ui.view">
+        <field name="name">product.import.log.tree</field>
+        <field name="model">product.import.log</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="total"/>
+                <field name="success"/>
+                <field name="failed"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_product_import_log_form" model="ir.ui.view">
+        <field name="name">product.import.log.form</field>
+        <field name="model">product.import.log</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <field name="name"/>
+                    <field name="total"/>
+                    <field name="success"/>
+                    <field name="failed"/>
+                </group>
+                <field name="message" widget="text"/>
+            </form>
+        </field>
+    </record>
+
+    <act_window id="action_product_import_log"
+                name="Import Logs"
+                res_model="product.import.log"
+                view_mode="tree,form"
+                target="current"/>
+</odoo>
