@@ -9,6 +9,7 @@
         "security/ir.model.access.csv",
         "views/product_import_wizard_view.xml",
         "views/product_import_log_view.xml",
+        "data/product_image_cron.xml",
     ],
     "installable": True,
     "application": True,
