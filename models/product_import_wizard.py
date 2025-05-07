@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 import base64
 import tempfile
 import binascii
@@ -8,6 +10,7 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 import xlrd
 import openpyxl
+import pandas as pd
 
 _logger = logging.getLogger(__name__)
 
@@ -35,6 +38,9 @@ class ProductImportWizard(models.TransientModel):
                 tmp.write(file_data)
                 tmp.flush()
                 wb = openpyxl.load_workbook(tmp.name, read_only=True)
+                print("Sheetnames:", wb.sheetnames)
+                print("Max row:", sheet.max_row)
+                print("Max column:", sheet.max_column)
                 sheet = wb.active
                 for idx, row in enumerate(sheet.iter_rows(min_row=2), 2):
                     values = [cell.value for cell in row]
@@ -63,7 +69,7 @@ class ProductImportWizard(models.TransientModel):
         error_msgs = []
         image_cache = {}
 
-        BATCH_SIZE = 50 # 处理批次大小
+        BATCH_SIZE = 2 # 处理批次大小
 
         for idx, (row_num, row) in enumerate(products_data, 1):
             print(f"Processing row {row_num}: {row}")
@@ -102,30 +108,12 @@ class ProductImportWizard(models.TransientModel):
                 print(f"Image URL: {image_url}")
                 image_content = None
                 if image_url and isinstance(image_url, str) and image_url.startswith(('http://', 'https://')):
-                    if image_url in image_cache:
-                        image_content = image_cache[image_url]
-                        #print(f"Image content from cache: {image_content}")
-                    else:
-                        try:
-                            response = requests.get(image_url, timeout=10)
-                            print(f"Response: {response.status_code}")
-                            if response.status_code == 200:
-                                image_content = response.content
-                                # print(f"Image content: {image_content}")
-                                image_cache[image_url] = response.content
-                        except Exception as e:
-                            print(f"Image download failed: {e}")
-                            _logger.warning(f"[Row {row_num}] Image download failed for {image_url}: {e}")
-                if image_content:
-                    product_tmpl.image_1920 = base64.b64encode(response.content)
-                    product_tmpl.image_1024 = base64.b64encode(response.content)
-                    product_tmpl.image_512 = base64.b64encode(response.content)
-                    product_tmpl.image_256 = base64.b64encode(response.content)
-                    product_tmpl.image_128 = base64.b64encode(response.content)
+                    product_tmpl.image_url = image_url
 
                 # 设置字段
                 weight = row[7] if row[7] else 0
                 price = row[8] if row[8] else 0
+                print(f"Weight: {weight}, Price: {price}")
                 # length = float(row[10]) if row[10] else 0
                 # width = float(row[11]) if row[11] else 0
                 # height = float(row[12]) if row[12] else 0
@@ -172,7 +160,8 @@ class ProductImportWizard(models.TransientModel):
             except Exception as e:
                 error_msgs.append(f"Row {row_num}: {str(e)}")
                 print(f"Error processing row {row_num}: {e}")
-                exit(1)
+                continue
+                # exit(1)
             if idx % BATCH_SIZE == 0:
                 self.env.cr.commit()
                 self.env.invalidate_all()
@@ -184,6 +173,11 @@ class ProductImportWizard(models.TransientModel):
             'failed': total - success,
             'message': '\n'.join(error_msgs),
         })
+
+        # 触发异步下载图片
+        # cron = self.env['ir.cron'].search([('name', '=', 'Download Product Images')], limit=1)
+        # if cron:
+        #     cron.method_direct_trigger()
 
         return {
             'type': 'ir.actions.act_window',
