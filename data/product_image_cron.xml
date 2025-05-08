@@ -1,0 +1,12 @@
+<odoo>
+    <record id="ir_cron_product_image_download" model="ir.cron">
+        <field name="name">Download Product Images</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_update_product_images()</field>
+        <field name="interval_number">10</field> <!-- 每 10 分钟 -->
+        <field name="interval_type">minutes</field> <!-- 单位改为分钟 -->
+        <field name="numbercall">-1</field>
+        <field name="active">True</field>
+    </record>
+</odoo>
