@@ -44,6 +44,8 @@ class ProductImportWizard(models.TransientModel):
         if not self.file:
             raise UserError(_("Please upload an Excel file."))
 
+        wizard_filename = self.filename # 将 filename 存储在局部变量中
+
         try:
             file_data = base64.b64decode(self.file)
         except binascii.Error:
@@ -84,7 +86,7 @@ class ProductImportWizard(models.TransientModel):
         if not products_data:
             _logger.info("No valid product data found in the Excel file to import.")
             if error_msgs:
-                 return self._import_result(0, 0, error_msgs)
+                 return self._import_result(wizard_filename, 0, 0, error_msgs)
             raise UserError(_("No valid product data found in the uploaded Excel file."))
 
         total_to_process = len(products_data)
@@ -191,7 +193,7 @@ class ProductImportWizard(models.TransientModel):
                 # If a db error occurs, the transaction might be aborted, and cursor closed.
                 # It's safer to stop and report.
                 error_msgs.append("CRITICAL: Database error occurred. Import stopped to prevent further issues.")
-                return self._import_result(total_to_process, successful_imports, error_msgs)
+                return self._import_result(wizard_filename, total_to_process, successful_imports, error_msgs)
             except Exception as e_row:
                 msg = f"Row {excel_row_num} (SKU: {self._get_cell_value(row_values, 0, 'N/A')}): Processing error: {str(e_row)}"
                 error_msgs.append(msg)
@@ -210,11 +212,11 @@ class ProductImportWizard(models.TransientModel):
                 except psycopg2.Error as e_commit_db: # Catch psycopg2 errors specifically during commit
                     _logger.error(f"CRITICAL: Database error during commit at batch {loop_idx} (Excel row {excel_row_num}): {e_commit_db}", exc_info=True)
                     error_msgs.append(f"CRITICAL: DB commit failed at batch {loop_idx}. Import stopped. Error: {e_commit_db}")
-                    return self._import_result(total_to_process, successful_imports, error_msgs)
+                    return self._import_result(wizard_filename, total_to_process, successful_imports, error_msgs)
                 except Exception as e_commit:
                     _logger.error(f"CRITICAL: Error committing transaction at batch {loop_idx} (Excel row {excel_row_num}): {e_commit}", exc_info=True)
                     error_msgs.append(f"CRITICAL: Commit failed at batch {loop_idx}. Import stopped. Error: {e_commit}")
-                    return self._import_result(total_to_process, successful_imports, error_msgs)
+                    return self._import_result(wizard_filename, total_to_process, successful_imports, error_msgs)
         
         # Final commit for any remaining records
         # Check if there are records processed since the last batch commit OR if total is less than BATCH_SIZE
@@ -232,13 +234,13 @@ class ProductImportWizard(models.TransientModel):
                 error_msgs.append(f"CRITICAL: Error during final commit. Error: {e_final_commit}")
 
         _logger.info(f"Product import finished. Total rows: {total_to_process}, Successful: {successful_imports}, Errors/Skipped: {len(error_msgs)}")
-        return self._import_result(total_to_process, successful_imports, error_msgs)
+        return self._import_result(wizard_filename,total_to_process, successful_imports, error_msgs)
 
-    def _import_result(self, total_rows, success_count, error_list):
+    def _import_result(self, import_filename, total_rows, success_count, error_list):
         try:
             log_message = '\n'.join(error_list)
             self.env['product.import.log'].create({
-                'name': self.filename or f"Product Import @ {fields.Datetime.now(self)}",
+                'name': import_filename or f"Product Import @ {fields.Datetime.now(self)}",
                 'total': total_rows,
                 'success': success_count,
                 'failed': total_rows - success_count,
