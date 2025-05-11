@@ -66,6 +66,14 @@ class ProductImportWizard(models.TransientModel):
 
         wizard_filename = self.filename # 将 filename 存储在局部变量中
 
+        # check the platform is valid
+        if self.platform not in dict(self._fields['platform'].selection).keys():
+            raise UserError(_("Invalid platform selected."))
+        
+        # check the working platform is valid
+        if self.platform not in ['dianxiaomi', 'mabangerp']:
+            raise UserError(_("Invalid platform selected."))
+
         try:
             file_data = base64.b64decode(self.file)
         except binascii.Error:
@@ -80,19 +88,34 @@ class ProductImportWizard(models.TransientModel):
                 tmp.write(file_data)
                 tmp_path = tmp.name
             
-            df = pd.read_excel(tmp_path, header=0, engine=None, dtype=str)
-            _logger.info(f"Excel columns found: {df.columns.tolist()}")
+            if self.platform == 'shopify':
+                # shopify is a csv file
+                with open(tmp_path, 'r', encoding='utf-8') as csvfile:
+                    reader = csv.reader(csvfile)
+                    header = next(reader, None)
+                    for idx, row in enumerate(reader):
+                        excel_row_num = idx + 2
+                        sku_val = row[0] if len(row) > 0 else ''
+                        if not sku_val:
+                            msg = f"Row {excel_row_num}: SKU is empty, skipping this row."
+                            error_msgs.append(msg)
+                            _logger.warning(msg)
+                            continue
+                        products_data.append((excel_row_num, row))
+            else:
+                df = pd.read_excel(tmp_path, header=0, engine=None, dtype=str)
+                _logger.info(f"Excel columns found: {df.columns.tolist()}")
 
-            for idx, row_series in df.iterrows():
-                values = row_series.tolist()
-                excel_row_num = idx + 2
-                sku_val = self._get_cell_value(values, 0)
-                if not sku_val:
-                    msg = f"Row {excel_row_num}: SKU is empty, skipping this row."
-                    error_msgs.append(msg)
-                    _logger.warning(msg)
-                    continue
-                products_data.append((excel_row_num, values))
+                for idx, row_series in df.iterrows():
+                    values = row_series.tolist()
+                    excel_row_num = idx + 2
+                    sku_val = self._get_cell_value(values, 0)
+                    if not sku_val:
+                        msg = f"Row {excel_row_num}: SKU is empty, skipping this row."
+                        error_msgs.append(msg)
+                        _logger.warning(msg)
+                        continue
+                    products_data.append((excel_row_num, values))
         except Exception as e:
             _logger.error(f"Failed to read or process Excel file: {e}", exc_info=True)
             raise UserError(_("Failed to read or process the Excel file. Error: %s") % str(e))
@@ -119,11 +142,11 @@ class ProductImportWizard(models.TransientModel):
         for loop_idx, (excel_row_num, row_values) in enumerate(products_data, 1):
             try:
                 # _logger.debug(f"Current cursor state before processing row {excel_row_num}: {self.env.cr.closed if self.env.cr else 'No cursor'}")
-                sku = self._get_cell_value(row_values, 0)
-                _logger.info(f"Processing Excel row {excel_row_num}, SKU: {sku}")
-                print(f"Processing Excel row {excel_row_num}, SKU: {sku}")
+                
+                
 
                 if self.platform == 'dianxiaomi':
+                    sku = self._get_cell_value(row_values, 0)
                     product_name_cn = self._get_cell_value(row_values, 2)
                     product_name_en = self._get_cell_value(row_values, 3)
                     #product_name = product_name_en or product_name_cn or sku
@@ -135,7 +158,9 @@ class ProductImportWizard(models.TransientModel):
                     decl_name_en_ext = self._get_cell_value(row_values, 15)
                     decl_name_cn_ext = self._get_cell_value(row_values, 16)
                     decl_price_str_ext = self._get_cell_value(row_values, 18, '0.0')
+
                 elif self.platform == 'mabangerp':
+                    sku = self._get_cell_value(row_values, 0)
                     product_name_cn = self._get_cell_value(row_values, 2)
                     product_name_en = self._get_cell_value(row_values, 3)
                     # product name include en and cn and sku
@@ -150,7 +175,24 @@ class ProductImportWizard(models.TransientModel):
                     decl_name_en_ext = self._get_cell_value(row_values, 4)
                     decl_name_cn_ext = self._get_cell_value(row_values, 5)
                     decl_price_str_ext = self._get_cell_value(row_values, 6, '0.0')
+                elif self.platform == 'shopify':
+                    sku = self._get_cell_value(row_values, 17)
+                    product_name_cn = self._get_cell_value(row_values, 2)
+                    product_name_en = self._get_cell_value(row_values, 3)
+                    # product name include en and cn and sku
+                    product_name = product_name_en + product_name_cn + sku
+
+                    #product_name = product_name_en or product_name_cn or sku
+
+                    # 图片处理
+                    image_url = self._get_cell_value(row_values, 6) 
+                    # 报关数据处理
+                    product_url_ext = self._get_cell_value(row_values, 13)
+                    decl_name_en_ext = self._get_cell_value(row_values, 15)
+                    decl_name_cn_ext = self._get_cell_value(row_values, 16)
+                    decl_price_str_ext = self._get_cell_value(row_values, 18, '0.0')
                 else: # 默认处理方式 店小蜜
+                    sku = self._get_cell_value(row_values, 0)
                     product_name_cn = self._get_cell_value(row_values, 2)
                     product_name_en = self._get_cell_value(row_values, 3)
                     product_name = product_name_en or product_name_cn or sku
@@ -159,6 +201,9 @@ class ProductImportWizard(models.TransientModel):
                     decl_name_en_ext = self._get_cell_value(row_values, 15)
                     decl_name_cn_ext = self._get_cell_value(row_values, 16)
                     decl_price_str_ext = self._get_cell_value(row_values, 18, '0.0')
+
+                _logger.info(f"Processing Excel row {excel_row_num}, SKU: {sku}")
+                print(f"Processing Excel row {excel_row_num}, SKU: {sku}")
                 
                 # 核心改动点：在可能导致游标关闭的 commit 操作之后，这里的 search 需要特别小心
                 # 尝试在 search 前确保游标是活动的，或者让 Odoo ORM 自己处理
