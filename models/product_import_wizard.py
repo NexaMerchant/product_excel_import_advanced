@@ -20,6 +20,26 @@ class ProductImportWizard(models.TransientModel):
 
     file = fields.Binary(string='Upload Excel File', required=True, help="Upload an Excel file (.xls or .xlsx) for product import.")
     filename = fields.Char(string='Filename')
+    platform = fields.Selection([
+        ('dianxiaomi', '店小秘'),
+        ('mabangerp', '马帮ERP'),
+        ('odoo', 'Odoo'),
+        ('shopify', 'Shopify'),
+        ('woocommerce', 'WooCommerce'),
+        ('magento', 'Magento'),
+        ('ebay', 'eBay'),
+        ('amazon', 'Amazon'),
+        ('wish', 'Wish'),
+        ('aliexpress', 'AliExpress'),
+        ('lazada', 'Lazada'),
+        ('shopee', 'Shopee'),
+        ('jd', '京东'),
+        ('taobao', '淘宝'),
+        ('tmall', '天猫'),
+        ('pinduoduo', '拼多多'),
+        ('suning', '苏宁易购'),
+    ], string='Platform')
+    default_stock_location = fields.Many2one('stock.location', string='Default Stock Location', required=True, help="Default stock location for imported products.")
 
     def _get_cell_value(self, row_list, col_idx, default_value=''):
         """ 安全地从列表（Excel行）中获取单元格值 """
@@ -101,10 +121,44 @@ class ProductImportWizard(models.TransientModel):
                 # _logger.debug(f"Current cursor state before processing row {excel_row_num}: {self.env.cr.closed if self.env.cr else 'No cursor'}")
                 sku = self._get_cell_value(row_values, 0)
                 _logger.info(f"Processing Excel row {excel_row_num}, SKU: {sku}")
+                print(f"Processing Excel row {excel_row_num}, SKU: {sku}")
 
-                product_name_cn = self._get_cell_value(row_values, 2)
-                product_name_en = self._get_cell_value(row_values, 3)
-                product_name = product_name_en or product_name_cn or sku
+                if self.platform == 'dianxiaomi':
+                    product_name_cn = self._get_cell_value(row_values, 2)
+                    product_name_en = self._get_cell_value(row_values, 3)
+                    #product_name = product_name_en or product_name_cn or sku
+                    product_name = product_name_en + product_name_cn + sku
+                    # 图片处理
+                    image_url = self._get_cell_value(row_values, 6)
+                    # 报关数据处理
+                    product_url_ext = self._get_cell_value(row_values, 13)
+                    decl_name_en_ext = self._get_cell_value(row_values, 15)
+                    decl_name_cn_ext = self._get_cell_value(row_values, 16)
+                    decl_price_str_ext = self._get_cell_value(row_values, 18, '0.0')
+                elif self.platform == 'mabangerp':
+                    product_name_cn = self._get_cell_value(row_values, 2)
+                    product_name_en = self._get_cell_value(row_values, 3)
+                    # product name include en and cn and sku
+                    product_name = product_name_en + product_name_cn + sku
+
+                    #product_name = product_name_en or product_name_cn or sku
+
+                    # 图片处理
+                    image_url = self._get_cell_value(row_values, 12) 
+                    # 报关数据处理
+                    product_url_ext = self._get_cell_value(row_values, 11)
+                    decl_name_en_ext = self._get_cell_value(row_values, 4)
+                    decl_name_cn_ext = self._get_cell_value(row_values, 5)
+                    decl_price_str_ext = self._get_cell_value(row_values, 6, '0.0')
+                else: # 默认处理方式 店小蜜
+                    product_name_cn = self._get_cell_value(row_values, 2)
+                    product_name_en = self._get_cell_value(row_values, 3)
+                    product_name = product_name_en or product_name_cn or sku
+                    image_url = self._get_cell_value(row_values, 6)
+                    product_url_ext = self._get_cell_value(row_values, 13)
+                    decl_name_en_ext = self._get_cell_value(row_values, 15)
+                    decl_name_cn_ext = self._get_cell_value(row_values, 16)
+                    decl_price_str_ext = self._get_cell_value(row_values, 18, '0.0')
                 
                 # 核心改动点：在可能导致游标关闭的 commit 操作之后，这里的 search 需要特别小心
                 # 尝试在 search 前确保游标是活动的，或者让 Odoo ORM 自己处理
@@ -118,6 +172,8 @@ class ProductImportWizard(models.TransientModel):
                         'default_code': sku,
                         'detailed_type': 'product',
                     }
+                    if(self.default_stock_location):
+                        product_tmpl_vals['property_stock_inventory'] = self.default_stock_location.id
                     product_tmpl = self.env['product.template'].create(product_tmpl_vals)
                     product = product_tmpl.product_variant_ids[:1]
                     if not product:
@@ -131,8 +187,11 @@ class ProductImportWizard(models.TransientModel):
                     if product_tmpl.name != product_name:
                         product_tmpl.write({'name': product_name})
                         _logger.info(f"Row {excel_row_num}: Updated name for SKU {sku} to '{product_name}'")
+                    # 更新库存位置
+                    if self.default_stock_location and product_tmpl.property_stock_inventory != self.default_stock_location:
+                        product_tmpl.property_stock_inventory = self.default_stock_location
                 
-                image_url = self._get_cell_value(row_values, 6)
+                
                 if image_url and image_url.startswith(('http://', 'https://')):
                     if product_tmpl.image_url != image_url:
                         product_tmpl.image_url = image_url
@@ -158,10 +217,7 @@ class ProductImportWizard(models.TransientModel):
                     _logger.warning(msg)
 
                 if 'products_ext.products_ext' in self.env:
-                    product_url_ext = self._get_cell_value(row_values, 13)
-                    decl_name_en_ext = self._get_cell_value(row_values, 15)
-                    decl_name_cn_ext = self._get_cell_value(row_values, 16)
-                    decl_price_str_ext = self._get_cell_value(row_values, 18, '0.0')
+                    
                     try:
                         decl_price_val_ext = float(decl_price_str_ext)
                     except ValueError:
@@ -235,6 +291,7 @@ class ProductImportWizard(models.TransientModel):
 
         _logger.info(f"Product import finished. Total rows: {total_to_process}, Successful: {successful_imports}, Errors/Skipped: {len(error_msgs)}")
         return self._import_result(wizard_filename,total_to_process, successful_imports, error_msgs)
+
 
     def _import_result(self, import_filename, total_rows, success_count, error_list):
         try:
