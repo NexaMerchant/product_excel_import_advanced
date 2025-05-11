@@ -301,6 +301,9 @@ class ProductImportWizard(models.TransientModel):
                 'total': total_rows,
                 'success': success_count,
                 'failed': total_rows - success_count,
+                'platform': self.platform,
+                'default_stock_location': self.default_stock_location.id if self.default_stock_location else False,
+                'import_file': self.file,
                 'message': log_message,
             })
             _logger.info("Import log record created.")

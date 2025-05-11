@@ -30,7 +30,7 @@ class ProductImportLog(models.Model):
         ('kaola', '考拉海购'),
         ], string="Platform", required=True, help="Select the platform import template for product import.")
     default_stock_location = fields.Many2one('stock.location', string="Default Stock Location", required=True)
-    import_file = fields.Binary("Import File", required=True)
+    import_file = fields.Binary("Import File", required=True, attachment=True)
     total = fields.Integer("Total Rows")
     success = fields.Integer("Success Rows")
     failed = fields.Integer("Failed Rows")
