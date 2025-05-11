@@ -203,7 +203,7 @@ class ProductImportWizard(models.TransientModel):
                     decl_price_str_ext = self._get_cell_value(row_values, 18, '0.0')
 
                 _logger.info(f"Processing Excel row {excel_row_num}, SKU: {sku}")
-                print(f"Processing Excel row {excel_row_num}, SKU: {sku}")
+                #print(f"Processing Excel row {excel_row_num}, SKU: {sku}")
                 
                 # 核心改动点：在可能导致游标关闭的 commit 操作之后，这里的 search 需要特别小心
                 # 尝试在 search 前确保游标是活动的，或者让 Odoo ORM 自己处理
