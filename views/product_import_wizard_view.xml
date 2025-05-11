@@ -5,8 +5,10 @@
         <field name="arch" type="xml">
             <form string="Product Excel Import">
                 <group>
-                    <field name="file" filename="filename"/>
+                    <field name="file" filename="filename" help="Please select the right platform product template for product import"/>
                     <field name="filename"/>
+                    <field name="platform" options="{'no_create': True}"/>
+                    <field name="default_stock_location" options="{'no_create': True}"/>
                 </group>
                 <footer>
                     <button name="action_import_products" type="object" string="Import Products" class="btn-primary"/>
